@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 import HLogic
 import Control.Monad hiding (fail)
 
@@ -42,9 +43,9 @@ example4 = do
 
 
 example5 = do
-	[a,b,c,d,e] <- replicateM 5 fresh
-	[a,b,c,d] === [a, a, TInt 3, c]
-	return [a,b,c,d,e]
+        [a,b,c,d,e] <- replicateM 5 fresh
+        [a,b,c,d] === [a, a, TInt 3, c]
+        return [a,b,c,d,e]
 -- => [[?_0, ?_0, 3, 3, ?_4]]
 
 
@@ -73,10 +74,10 @@ genealogy2 = do
 -- => [George]
 
 genealogy3 = do
-	q <- fresh
-	w <- fresh
-	son q w
-	return [q,w]
+        q <- fresh
+        w <- fresh
+        son q w
+        return [q,w]
 -- => [[John, George],[John, Lucy]]
 
 

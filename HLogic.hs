@@ -1,4 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, OverlappingInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module HLogic(
     eq,
@@ -22,6 +24,7 @@ module HLogic(
 
 import Prelude hiding (fail)
 import qualified Data.Map as Map
+import Control.Applicative
 import Control.Monad hiding (fail)
 import Data.List
 
@@ -54,7 +57,7 @@ instance Termable Int where
 instance Termable LVar where
     toTerm (LVar a) = TVar a
 
-instance Termable String where
+instance {-# OVERLAPS #-} Termable String where
     toTerm = TString
 
 instance (Termable a) => Termable [a] where
@@ -68,6 +71,7 @@ type Constrains = [(Term, Term)] -- disequality constrains
 data Substitution = Substitution (Map.Map LVar Term) Int Constrains | Zonk deriving (Show, Eq)
 
 newtype MLogic a = MLogic {runMLogic :: Substitution -> [(Substitution, a)]}
+  deriving Functor
 type Predicate = MLogic ()
 
 emptySubstitution = Substitution Map.empty 0 []
@@ -126,20 +130,28 @@ success :: Predicate
 success = return ()
 
 fail :: Predicate
-fail = mzero
+fail = empty
 
 getEnv :: MLogic Substitution
 getEnv = MLogic $ \s -> [(s,s)]
+
+
+instance Alternative MLogic where
+    empty = MLogic $ \s -> []
+    ma <|> mb = MLogic $ \s -> runMLogic ma s ++ runMLogic mb s
+
+instance Applicative MLogic where
+    pure a = MLogic $ \s -> [(s, a)]
+    mf <*> ma = do { f <- mf; f <$> ma }
 
 instance Monad MLogic where
     a >>= f = MLogic $ \subst -> concatMap fn (runMLogic a subst)
         where
             fn (subst, x) = runMLogic (f x) subst
-    return a = MLogic $ \s -> [(s, a)]
 
 instance MonadPlus MLogic where
-    mzero = MLogic $ \s -> []
-    mplus a b = MLogic $ \s -> runMLogic a s ++ runMLogic b s
+
+instance MonadFail MLogic where
 
 fresh :: MLogic Term
 fresh = MLogic $ \(Substitution m counter d) -> [(Substitution m (counter + 1) d, TVar counter)]
@@ -152,7 +164,7 @@ membero x xs = do
     h <- fresh
     t <- fresh
     conso h t xs
-    (eq x h) `mplus` (membero x t)
+    (eq x h) <|> (membero x t)
 
 heado h l = do
     t <- fresh
@@ -164,11 +176,11 @@ tailo t l = do
 
 emptyo l = l === TNil
 
-anyo g = mplus g (anyo g)
+anyo g = g <|> (anyo g)
 
 appendo l s out =
     ((emptyo l) >> (s === out))
-    `mplus`
+    <|> 
     (do
         a <- fresh
         d <- fresh
